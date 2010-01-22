@@ -101,14 +101,15 @@ int walk(const char *name, const struct stat *status, int type){
 
 char buffer[4096 * 1024];
 
-void defrag(const char *filename){
+void defrag(struct filecost *fc){
+	printf("Defragmenting '%s', which has %i fragments\n", fc->filename, fc->cost);
 	int rfd, wfd;
 	struct stat stats;
 	{
-		rfd = open(filename, O_RDONLY);
+		rfd = open(fc->filename, O_RDONLY);
 		fstat(rfd, &stats);
 		off_t length = stats.st_size;
-		wfd = open("tmpfile", O_CREAT | O_WRONLY);
+		wfd = open("tmpfile", O_CREAT | O_TRUNC | O_WRONLY);
 		ftruncate(wfd, length);
 	}
 
@@ -131,7 +132,14 @@ void defrag(const char *filename){
 	close(wfd);
 	close(rfd);
 
-	rename("tmpfile", filename);
+	int newcost = filefrag("tmpfile");
+	if(newcost < fc->cost){
+		printf("\tnow %i fragments\n", newcost);
+		rename("tmpfile", fc->filename);
+	}else{
+		printf("\tnew file woud be %i fragments. skipping.\n", newcost);
+		remove("tmpfile");
+	}
 }
 
 int main(){
@@ -147,9 +155,7 @@ int main(){
 		if(costs[i].cost < 10){
 			break;
 		}
-		printf("Defragmenting '%s', which has %i fragments\n", costs[i].filename, costs[i].cost);
-		defrag(costs[i].filename);
-		printf("\tnow %i fragments\n", filefrag(costs[i].filename));
+		defrag(&costs[i]);
 	}
 	return 0;
 }
